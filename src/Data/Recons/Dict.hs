@@ -1,5 +1,3 @@
-{-# Language TypeFamilies #-}
-{-# Language GADTs #-}
 module Data.Recons.Dict (
                           TrieDictSkipKey(..)
                         , makeKey

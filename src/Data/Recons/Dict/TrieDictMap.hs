@@ -3,8 +3,6 @@
 module Data.Recons.Dict.TrieDictMap where
 
 import Data.Monoid ((<>))
-import qualified Data.Map as M
-import Data.Maybe
 
 class TrieDictMapKey k where
   data GTrieDictMap k :: * -> *
@@ -29,7 +27,7 @@ class TrieDictMapKey k where
   unionsWith fn = fromListWith fn . foldMap toList
 
   fromList :: [(k,v)] -> GTrieDictMap k v
-  fromList = fromListWith (\a b -> b)
+  fromList = fromListWith (\_ b -> b)
 
   fromListWith :: (v -> v -> v) -> [(k,v)] -> GTrieDictMap k v
   fromListWith fn elems = foldl (\t (k,v) -> insertWith fn k v t) empty elems
@@ -37,7 +35,7 @@ class TrieDictMapKey k where
   insertWith :: ( v -> v -> v ) -> k -> v -> GTrieDictMap k v -> GTrieDictMap k v
 
   insert :: k -> v -> GTrieDictMap k v -> GTrieDictMap k v
-  insert = insertWith (\a b -> b)
+  insert = insertWith (\_ b -> b)
 
   lookup :: k -> GTrieDictMap k v -> Maybe v
 

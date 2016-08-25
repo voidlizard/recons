@@ -44,6 +44,8 @@ library
                      , transformers
                      , vinyl
 
+  ghc-options: -Wall -fno-warn-name-shadowing -fno-warn-unused-do-bind
+
 
 executable Example1 
   hs-source-dirs:      examples

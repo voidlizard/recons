@@ -12,17 +12,13 @@
 
 module Servant.Recons.ConvertAPI (ConvertAPI(..),convert) where
 
-import Data.Maybe
-import Data.Monoid ((<>))
 import Data.Typeable
 import Data.Vinyl
 import GHC.TypeLits
 import Servant.API
-import Servant.Client
+import Servant.Client(HasClient(..),client)
 
 import Servant.Recons.Parser
-
-import Network.HTTP.Client (Manager)
 
 class HasClient api => ConvertAPI api input where
   type FinalType api :: *
@@ -60,7 +56,8 @@ convert :: ( ConvertAPI api input
            )
         => Proxy api -> Maybe input -> Maybe (FinalType api)
 
-convert prx Nothing = Nothing
+convert _ Nothing = Nothing
+
 convert prx (Just input) = Just $! convertClient prx input (client prx)
 
 

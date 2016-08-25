@@ -18,11 +18,6 @@ instance Functor TrieDictSkipKey where
 
 type TrieImpl k v = GTrieDictMap (TrieDictSkipKey k) v
 
-
--- instance Ord k => Monoid (TrieImpl k v) where
---   mempty
---   mappend a b = union a b
-
 instance Ord k => TrieDictMapKey (TrieDictSkipKey k) where
   data GTrieDictMap (TrieDictSkipKey k) v = Nil
                                           | NodeA (Maybe v) (M.Map k (TrieImpl k v))
@@ -33,16 +28,16 @@ instance Ord k => TrieDictMapKey (TrieDictSkipKey k) where
 
   lookup  k trie = find (unwrap k) trie
     where find _ Nil = Nothing
-          find (Just x:xs) (NodeA mv tries) = maybe Nothing (find xs) (M.lookup x tries)
-          find (Nothing:xs) (NodeA mv tries) = Nothing
-          find (_:xs) (NodeB mv trie) = find xs trie
+          find (Just x:xs) (NodeA _ tries) = maybe Nothing (find xs) (M.lookup x tries)
+          find (Nothing:_) (NodeA _ _) = Nothing
+          find (_:xs) (NodeB _ trie) = find xs trie
           find [] (NodeA mv _) = mv
           find [] (NodeB mv _) = mv
 
   lookupPartial k t = find (unwrap k) t
     where find _ Nil = Nil
           find (Just x:xs) (NodeA _ mtries) = maybe Nil (find xs) (M.lookup x mtries)
-          find (Nothing:xs) (NodeA _ _) = Nil
+          find (Nothing:_) (NodeA _ _) = Nil
           find (_:xs) (NodeB _ trie) = find xs trie
           find [] e = e
 
@@ -74,7 +69,7 @@ instance Ord k => TrieDictMapKey (TrieDictSkipKey k) where
 
       ins (Just x:xs) Nil = NodeA Nothing (M.singleton x (ins xs Nil))
       ins (Just x:xs) (NodeA mv mtries) = NodeA mv (M.alter (alt xs) x mtries)
-      ins (Just x:xs) (NodeB mv trie) = NodeB mv (ins xs trie)
+      ins (Just _:xs) (NodeB mv trie) = NodeB mv (ins xs trie)
 
       alt xs = Just . maybe (ins xs empty) (ins xs)
 

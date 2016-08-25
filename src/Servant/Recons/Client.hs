@@ -17,11 +17,8 @@ module Servant.Recons.Client ( FromAPI(..)
                              , module Dict
                              ) where
 
-import Control.Monad.Trans.Except (ExceptT, runExceptT)
-import Data.Either
-import Data.Monoid((<>))
+import Control.Monad.Trans.Except (runExceptT)
 import Data.Typeable
-import GHC.Prim
 import Network.HTTP.Client (Manager)
 import Servant.API
 import Servant.Client
@@ -34,7 +31,7 @@ type family GetFinalType a where
   GetFinalType (Verb a b c d) = d
   GetFinalType ( a :> b ) = GetFinalType b
 
-data Aux c = forall a . c a => Aux { unC :: a }
+data Aux c = forall a . c a => Aux a
 
 type ReconsClient a  = Manager -> BaseUrl -> ClientM a
 type ReconsAction c  = [String] -> Maybe (ReconsClient (Aux c))

@@ -6,7 +6,6 @@ module Data.Recons.Dict.Internal.TrieDictMap ( T.empty
 
 import qualified Data.Map as M
 import Data.Recons.Dict.TrieDictMap as T
-import Data.List (unfoldr,concat)
 import Data.Monoid ((<>))
 
 instance Ord k => TrieDictMapKey [k] where

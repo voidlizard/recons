@@ -7,17 +7,13 @@
 {-# LANGUAGE TypeOperators #-}
 module Servant.Recons.Parser where
 
-import Data.String
 import Data.Typeable
 import Data.Vinyl
 import GHC.TypeLits
 import Servant.API
-import Servant.Client
 import Data.Text (Text)
 import qualified Data.Text as T
 import Text.Read
-
-import Debug.Trace
 
 type family APIToFields layout :: [(Symbol, *)] where
   APIToFields (QueryParam s a :> b) = '(s, a) ': APIToFields b
