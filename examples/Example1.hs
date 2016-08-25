@@ -28,9 +28,15 @@ import Servant.Server
 import System.Console.Haskeline as H
 -- import System.Console.Haskeline.Completion (CompletionType(..))
 -- import System.Console.Haskeline.Prefs
-import System.Console.Terminfo.PrettyPrint
-import System.Console.Terminfo.PrettyPrint as Term
-import Text.PrettyPrint.Free
+--
+--
+import System.Environment
+import Text.PrettyPrint.ANSI.Leijen as P
+
+-- import System.IO
+-- import System.Console.Terminfo.PrettyPrint
+-- import System.Console.Terminfo.PrettyPrint as Term
+-- import Text.PrettyPrint.Free
 
 import CLI.Recons
 import Data.Attoparsec.Recons
@@ -67,7 +73,6 @@ server = serveAPI1
 app :: Application
 app = serve (Proxy :: Proxy SumAPI) server
 
-
 data ReplSettings = ReplSettings { complDict  :: GTrieDictMap (TrieDictSkipKey String) [PrefixPart]
                                  , clientDict :: DictType CliResult 
                                  , manager    :: Manager
@@ -75,17 +80,14 @@ data ReplSettings = ReplSettings { complDict  :: GTrieDictMap (TrieDictSkipKey S
                                  }
 
 
-class (PrettyTerm v, Show v) => CliResult v
+class (Pretty v) => CliResult v
 
 instance CliResult String where
 
 newtype CliError e = CliError e 
 
 instance Pretty e => Pretty (CliError e) where
-  pretty (CliError e) = text "*** error: " <> pretty e 
-
-instance PrettyTerm e => PrettyTerm (CliError e) where
-  prettyTerm (CliError e) = bold $ red $ prettyTerm e
+  pretty (CliError e) = red $ text "*** error: " <> pretty e 
 
 inputTokens :: String -> [String]
 inputTokens = either (const []) id . tokenize
@@ -116,18 +118,36 @@ main = do
   manager <- newManager defaultManagerSettings
   let baseUrl = BaseUrl Http "localhost" 8081 ""
  
-  let prefs = defaultPrefs -- { completionType = read "MenuCompletion" }
+  let prefs = defaultPrefs
+
+  let bhw = preferTerm
 
   let rsets = ReplSettings replDict
                            clientDict
                            manager
                            baseUrl
 
-  _ <- runReaderT (runInputTWithPrefs prefs settings loop) rsets 
+  _ <- runReaderT (runInputTBehavior bhw settings loopBegin) rsets 
 
   return ()
 
   where
+
+    loopBegin = do
+
+      let wtf = underline $ black $ onwhite $ string "WTF"
+      let banner = string (replicate 80 '*') 
+                   <$$> P.empty 
+                   <$$> indent 16 (string "Welcome to Recons CLI interface example")
+                   <$$> indent 16 (string "Press some keys to have fun")
+                   <$$> P.empty
+                   <$$> string (replicate 80 '*') 
+                   <$$> P.empty
+
+      outputStrLn $ show $ pretty $ green $ banner     
+
+      loop
+
     loop = getInputLine "% " >>= maybe loop process . trim
 
     process input  = do
@@ -142,12 +162,12 @@ main = do
       let !mclient = Dict.lookup key actions >>= \ra -> parse ra toks
 
       case mclient of
-        Nothing -> outputStrLn $ "*** ^^^ bad command"
+        Nothing -> outputStrLn $ show $ pretty $ CliError "^^^ bad command"
         (Just client) -> do
-          res <- liftIO $ perform show manager baseUrl client
+          res <- liftIO $ perform pretty manager baseUrl client
           case res of
             Left err   -> outputStrLn $ (show err)
-            Right smth -> outputStrLn smth
+            Right smth -> outputStrLn (show smth)
 
       loop
 
