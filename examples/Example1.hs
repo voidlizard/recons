@@ -10,26 +10,27 @@
 
 module Main where
 
-import Control.Concurrent
 import Control.Applicative
+import Control.Concurrent
 import Control.Monad.Reader
 import Control.Monad.Trans
 import Data.Either
 import Data.List
-import Data.Monoid
+import Data.List (unfoldr,nub)
 import Data.Typeable
+import Network.HTTP.Client (Manager, newManager, defaultManagerSettings)
+import Network.Wai
+import Network.Wai.Handler.Warp hiding (Settings,defaultSettings)
+import qualified Network.Wai.Handler.Warp as W
 import Servant.API
 import Servant.Client
 import Servant.Server
 import System.Console.Haskeline as H
-
-import Network.Wai
-import Network.Wai.Handler.Warp hiding (Settings,defaultSettings)
-import qualified Network.Wai.Handler.Warp as W
-
-import Data.List (unfoldr,nub)
-import Network.HTTP.Client (Manager, newManager, defaultManagerSettings)
-
+-- import System.Console.Haskeline.Completion (CompletionType(..))
+-- import System.Console.Haskeline.Prefs
+import System.Console.Terminfo.PrettyPrint
+import System.Console.Terminfo.PrettyPrint as Term
+import Text.PrettyPrint.Free
 
 import CLI.Recons
 import Data.Attoparsec.Recons
@@ -38,24 +39,24 @@ import Servant.Recons
 import Servant.Recons.Client as Client
 import Servant.Recons.Dict (makeDict,PrefixPart(..))
 
-type API1  = "some"  :> QueryParam "test" Int :> Get '[JSON] (String,Maybe Int)
-type API11 = "some"  :> "shit" :> QueryParam "test" String :> Get '[JSON] (String,Maybe String)
-type API2  = "other" :> QueryParam "test" Double :> Get '[JSON] (String,Maybe Double)
-type API3  = "rest"  :> "shit" :> QueryParam "test" Double :> "skip" :> QueryParam "q" String :> Get '[JSON] (String,Maybe Double, Maybe String)
+type API1  = "some"  :> QueryParam "test" Int :> Get '[JSON] String
+type API11 = "some"  :> "shit" :> QueryParam "test" String :> Get '[JSON] String
+type API2  = "other" :> QueryParam "test" Double :> Get '[JSON] String
+type API3  = "rest"  :> "shit" :> QueryParam "test" Double :> "skip" :> QueryParam "q" String :> Get '[JSON] String
 
 type SumAPI = API1 :<|> API11 :<|> API2 :<|> API3
 
 serveAPI1 :: Server API1
-serveAPI1 a = return ("API1",a)
+serveAPI1 a = return "API1"
 
 serveAPI11 :: Server API11
-serveAPI11 a = return ("API11",a)
+serveAPI11 a = return "API11"
 
 serveAPI2 :: Server API2
-serveAPI2 a = return ("API2",a)
+serveAPI2 a = return "API2"
 
 serveAPI3 :: Server API3
-serveAPI3 a b = return ("API3",a,b)
+serveAPI3 a b = return "API3"
 
 server :: Server SumAPI
 server = serveAPI1
@@ -67,13 +68,24 @@ app :: Application
 app = serve (Proxy :: Proxy SumAPI) server
 
 
-
 data ReplSettings = ReplSettings { complDict  :: GTrieDictMap (TrieDictSkipKey String) [PrefixPart]
-                                 , clientDict :: DictType Show
+                                 , clientDict :: DictType CliResult 
                                  , manager    :: Manager
                                  , baseUrl    :: BaseUrl
                                  }
 
+
+class (PrettyTerm v, Show v) => CliResult v
+
+instance CliResult String where
+
+newtype CliError e = CliError e 
+
+instance Pretty e => Pretty (CliError e) where
+  pretty (CliError e) = text "*** error: " <> pretty e 
+
+instance PrettyTerm e => PrettyTerm (CliError e) where
+  prettyTerm (CliError e) = bold $ red $ prettyTerm e
 
 inputTokens :: String -> [String]
 inputTokens = either (const []) id . tokenize
@@ -98,16 +110,20 @@ main = do
 
   forkIO $ run 8081 (serve (Proxy ::Proxy SumAPI) server)
 
-  let clientDict = Client.fromAPI (Proxy :: Proxy Show) (Proxy :: Proxy SumAPI)
+  let clientDict = Client.fromAPI (Proxy :: Proxy CliResult) (Proxy :: Proxy SumAPI)
   let replDict = makeDict ( Proxy :: Proxy SumAPI)
 
   manager <- newManager defaultManagerSettings
   let baseUrl = BaseUrl Http "localhost" 8081 ""
+ 
+  let prefs = defaultPrefs -- { completionType = read "MenuCompletion" }
 
-  _ <- runReaderT (runInputT settings loop) $ ReplSettings replDict
-                                                           clientDict
-                                                           manager
-                                                           baseUrl
+  let rsets = ReplSettings replDict
+                           clientDict
+                           manager
+                           baseUrl
+
+  _ <- runReaderT (runInputTWithPrefs prefs settings loop) rsets 
 
   return ()
 
@@ -126,10 +142,12 @@ main = do
       let !mclient = Dict.lookup key actions >>= \ra -> parse ra toks
 
       case mclient of
-        Nothing -> outputStrLn "** bad command"
-        (Just client) -> liftIO $ do
-          res <- perform show manager baseUrl client
-          print res
+        Nothing -> outputStrLn $ "*** ^^^ bad command"
+        (Just client) -> do
+          res <- liftIO $ perform show manager baseUrl client
+          case res of
+            Left err   -> outputStrLn $ (show err)
+            Right smth -> outputStrLn smth
 
       loop
 

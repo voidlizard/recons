@@ -70,6 +70,8 @@ executable Example1
                      , vinyl
                      , wai
                      , warp
+                     , wl-pprint-terminfo
+                     , wl-pprint-extras
 
 
   default-language:    Haskell2010
