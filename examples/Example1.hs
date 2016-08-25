@@ -7,6 +7,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE QuasiQuotes, ExtendedDefaultRules #-}
 
 module Main where
 
@@ -23,13 +24,16 @@ import Network.Wai
 import Network.Wai.Handler.Warp hiding (Settings,defaultSettings)
 import qualified Network.Wai.Handler.Warp as W
 import Servant.API
-import Servant.Client
+import Servant.Client as C
 import Servant.Server
+
+import Network.HTTP.Types
+
 import System.Console.Haskeline as H
 -- import System.Console.Haskeline.Completion (CompletionType(..))
 -- import System.Console.Haskeline.Prefs
 --
---
+import Text.InterpolatedString.Perl6 (qq)
 import System.Environment
 import Text.PrettyPrint.ANSI.Leijen as P
 
@@ -48,7 +52,7 @@ import Servant.Recons.Dict (makeDict,PrefixPart(..))
 type API1  = "some"  :> QueryParam "test" Int :> Get '[JSON] String
 type API11 = "some"  :> "shit" :> QueryParam "test" String :> Get '[JSON] String
 type API2  = "other" :> QueryParam "test" Double :> Get '[JSON] String
-type API3  = "rest"  :> "shit" :> QueryParam "test" Double :> "skip" :> QueryParam "q" String :> Get '[JSON] String
+type API3  = "rest"  :> "shit" :> QueryParam "test" Double :> "skip" :> QueryParam "q" String :> Get '[JSON] [String]
 
 type SumAPI = API1 :<|> API11 :<|> API2 :<|> API3
 
@@ -62,7 +66,7 @@ serveAPI2 :: Server API2
 serveAPI2 a = return "API2"
 
 serveAPI3 :: Server API3
-serveAPI3 a b = return "API3"
+serveAPI3 a b = return $ replicate 200 "TEST STRING FROM API3"
 
 server :: Server SumAPI
 server = serveAPI1
@@ -84,23 +88,50 @@ class (Pretty v) => CliResult v
 
 instance CliResult String where
 
+-- instance Pretty [String] where
+--   pretty ss = vcat $ fmap text ss
+
+instance CliResult [String] where
+--   pretty ss = vcat $ fmap text ss
+
 newtype CliError e = CliError e 
 
 instance Pretty e => Pretty (CliError e) where
   pretty (CliError e) = red $ text "*** error: " <> pretty e 
 
+instance Pretty (ServantError) where
+  pretty e@(FailureResponse {C.responseStatus = s}) = red $ text [qq|*** server error {statusCode s}: {statusMessage s} |]
+                                                        <$$> text [qq|*** {responseBody e}|]
+                                                        <$$> P.empty
+
+  pretty e@(ConnectionError _) = red $ text "*** connection error:"
+                                     <$$> text (show e)
+                                     <$$> P.empty
+
+  pretty other = red $ text "*** some communication error:"
+                     <$$> text (show other)
+                     <$$> P.empty
+          
+
+instance Pretty (ServantErr) where
+  pretty err = red $ text "*** server error, code: " <> int (errHTTPCode err)
+                   <$$> indent 2 (text $ errReasonPhrase err)
+                   <$$> P.empty
+
 inputTokens :: String -> [String]
 inputTokens = either (const []) id . tokenize
 
 settings :: Settings (ReaderT ReplSettings IO)
-settings = setComplete (completeWordWithPrev (Just '\\')  " \t" compl) defaultSettings
+settings = setComplete (completeWordWithPrev (Just '\\')  " \t" compl) def
   where
+    def = defaultSettings { historyFile = Just ".example1-hist" }
+
     compl prev w = do
       cDict <- asks complDict
       let tokens = inputTokens (reverse prev)
       let key = makeKey tokens
 -- -       TODO: parameters completion
-      let ws = [x|W x <- concat $ Dict.lookup key cDict]
+      let ws = [ x | W x <- concat $ Dict.lookup key cDict ]
       let ws' = filter (isPrefixOf w) ws
       let cc = fmap (\w -> Completion w w True) ws'
 
@@ -166,8 +197,8 @@ main = do
         (Just client) -> do
           res <- liftIO $ perform pretty manager baseUrl client
           case res of
-            Left err   -> outputStrLn $ (show err)
-            Right smth -> outputStrLn (show smth)
+            Left err   -> outputStrLn $ show $ pretty err
+            Right smth -> outputStrLn $ show smth
 
       loop
 
