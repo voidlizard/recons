@@ -166,7 +166,6 @@ main = do
 
     loopBegin = do
 
-      let wtf = underline $ black $ onwhite $ string "WTF"
       let banner = string (replicate 80 '*') 
                    <$$> P.empty 
                    <$$> indent 16 (string "Welcome to Recons CLI interface example")
